@@ -4,16 +4,53 @@
 # https://aka.ms/yaml
 
 trigger:
-- main
+- D365YAMLpipeline
+
+variables:
+  system_accesstoken: $(System.AccessToken)
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: windows-2019
 
 steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+- checkout: self
+  persistCredentials: true
+- task: PowerPlatformToolInstaller@2
+  inputs:
+    DefaultVersion: true
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+- task: PowerPlatformExportSolution@2
+  inputs:
+    authenticationType: 'PowerPlatformSPN'
+    PowerPlatformSPN: 'DMO dev'
+    SolutionName: '$(SolutionName)'
+    SolutionOutputFile: 'Solutions/$(SolutionName).zip'
+    Managed: true
+    AsyncOperation: true
+    MaxAsyncWaitTime: '60'
+
+- task: PowerPlatformUnpackSolution@2
+  inputs:
+    SolutionInputFile: 'Solutions/$(SolutionName).zip'
+    SolutionTargetFolder: '$(SolutionName)'
+    SolutionType: 'Managed'
+
+- task: CmdLine@2
+  #env:
+    #SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+      #$myVar = $env:SYSTEM_ACCESSTOKEN
+  inputs:
+    script: |
+      git show-ref
+      git config user.email  "Harikrishna.laddunuri@british-business-bank.co.uk"
+      git config user.name "prakashkalimuthu"
+      git checkout -b D365YAMLpipeline
+      git add --all
+      git commit -m "$(CommitMessage)"
+      git -c http.extraheader="AUTHORIZATION: bearer $(system_accesstoken)" push origin D365YAMLpipeline
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(SolutionName)'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
